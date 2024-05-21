@@ -8,8 +8,9 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.10"
-honcho-ai = "^0.0.5"
 py-cord = "^2.5.0"
+honcho-ai = "^0.0.8"
+python-dotenv = "^1.0.1"
 
 
 [build-system]
