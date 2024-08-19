@@ -12,6 +12,8 @@ MODEL_API_KEY = os.getenv('MODEL_API_KEY')
 MODEL_ENDPOINT = os.getenv('MODEL_ENDPOINT')
 MODEL_TYPE = os.getenv('MODEL_TYPE')
 APP_NAME = os.getenv('APP_NAME')
+#ALLOWED_ROLES = os.getenv('ALLOWED_ROLES').split(',')
+
 
 intents = discord.Intents.default()
 intents.messages = True
@@ -25,40 +27,29 @@ bot = discord.Bot(intents=intents)
 
 def make_api_request(prompt, chat_history=None):
     headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {MODEL_API_KEY}"
+        "content-type": "application/json",
+        "x-api-key": MODEL_API_KEY,
+        "anthropic-version": "2023-06-01"
     }
     
-    if MODEL_TYPE == 'chat':
-        messages = []
-        if chat_history:
-            messages.extend(chat_history)
-        messages.append({"role": "user", "content": prompt})
-        payload = {
-            "model": MODEL_NAME,
-            "messages": messages
-        }
-    else:  # completions
-        # For non-chat models, we'll concatenate the history and prompt
-        full_prompt = ""
-        if chat_history:
-            for msg in chat_history:
-                full_prompt += f"{msg['role']}: {msg['content']}\n"
-        full_prompt += f"user: {prompt}"
-        payload = {
-            "model": MODEL_NAME,
-            "prompt": full_prompt,
-            "max_tokens": 150
-        }
+    messages = []
+    if chat_history:
+        messages.extend([{"role": "user" if msg.is_user else "assistant", "content": msg.content} for msg in chat_history])
+    messages.append({"role": "user", "content": prompt})
+
+    print(messages)
+    
+    payload = {
+        "model": MODEL_NAME,
+        "max_tokens": 1024,
+        "messages": messages
+    }
 
     response = requests.post(MODEL_ENDPOINT, headers=headers, json=payload)
     
     if response.status_code == 200:
         data = response.json()
-        if MODEL_TYPE == 'chat':
-            return data['choices'][0]['message']['content']
-        else:  # completions
-            return data['choices'][0]['text']
+        return data['content'][0]['text']
     else:
         return f"Error: {response.status_code} - {response.text}"
 
@@ -70,89 +61,123 @@ async def on_ready():
 
 @bot.event
 async def on_message(message):
-    """Event that is run when a message is sent in a channel that the bot has access to"""
+    """Event that is run when a message is sent in a channel or DM that the bot has access to"""
     if message.author == bot.user:
         # ensure the bot does not reply to itself
         return
 
-    print(message.content)
-    # Get a user object for the message author
-    user_id = f"discord_{str(message.author.id)}"
-    user = honcho.apps.users.get_or_create(name=user_id, app_id=app.id)
+    # if str(message.author.id) not in ALLOWED_ROLES:
+    #     # ignore messages from users not in the allowed list
+    #     return
 
-    # Get the session associated with the user and location
-    location_id = str(message.channel.id)  # Get the channel id for the message
+    is_dm = isinstance(message.channel, discord.DMChannel)
+    is_reply_to_bot = message.reference and message.reference.resolved.author == bot.user
+    is_mention = bot.user.mentioned_in(message)
 
-    sessions = [
-        session
-        for session in honcho.apps.users.sessions.list(
-            user_id=user.id, app_id=app.id, is_active=True, location_id=location_id
-        )
-    ]
+    if is_dm or is_reply_to_bot or is_mention:
+        # Remove the bot's mention from the message content if present
+        input = message.content.replace(f'<@{bot.user.id}>', '').strip()
+        
+        # If the message is empty after removing the mention, ignore it
+        if not input:
+            return
 
-    if len(sessions) > 0:
-        session = sessions[0]
-    else:
-        session = honcho.apps.users.sessions.create(
-            user_id=user.id, app_id=app.id, location_id=location_id
-        )
+        # Get a user object for the message author
+        user_id = f"discord_{str(message.author.id)}"
+        user = honcho.apps.users.get_or_create(name=user_id, app_id=app.id)
 
-    # Get the session's message history
-    history = [
-        message for message in 
-        honcho.apps.users.sessions.messages.list(
+        # Use the channel ID as the location_id (for DMs, this will be unique to the user)
+        location_id = str(message.channel.id)
+
+        # Query for active sessions with both user_id and location_id
+        sessions_iter = honcho.apps.users.sessions.list(
             app_id=app.id,
             user_id=user.id,
-            session_id=session.id
+            reverse=True
         )
-    ]
+        sessions = list(session for session in sessions_iter)
 
-    # Add user message to session
-    input = message.content
-    honcho.apps.users.sessions.messages.create(
-        app_id=app.id,
-        user_id=user.id,
-        session_id=session.id,
-        content=input,
-        is_user=True,
-    )
+        session = None
+        if sessions:
+            # find the right session
+            for s in sessions:
+                if s.metadata.get("location_id") == location_id:
+                    session = s
+                    print(session.id)
+                    break
+            # if no session is found after the for loop, create a new one
+            if not session:
+                print("No session found amongst existing ones, creating new one")
+                session = honcho.apps.users.sessions.create(
+                    user_id=user.id, 
+                    app_id=app.id, 
+                    metadata={"location_id": location_id}
+                )
+                print(session.id)
+        else:
+            print("No active session found")
+            session = honcho.apps.users.sessions.create(
+                user_id=user.id, 
+                app_id=app.id, 
+                metadata={"location_id": location_id}
+            )
+            print(session.id)
+        
+        # get messages
+        history_iter = honcho.apps.users.sessions.messages.list(
+            app_id=app.id, session_id=session.id, user_id=user.id
+        )
+        history = list(msg for msg in history_iter)
 
-    async with message.channel.typing():
-        response = make_api_request(input, history)  # Pass history to the function
-        await message.channel.send(response)
+        # Add user message to session
+        honcho.apps.users.sessions.messages.create(
+            app_id=app.id,
+            user_id=user.id,
+            session_id=session.id,
+            content=input,
+            is_user=True,
+        )
 
-    # Add bot message to session
-    honcho.apps.users.sessions.messages.create(
-        app_id=app.id,
-        user_id=user.id,
-        session_id=session.id,
-        content=response,
-        is_user=False,
-    )
+        async with message.channel.typing():
+            response = make_api_request(input, history)  
+            await message.channel.send(response)
+
+        # Add bot message to session
+        honcho.apps.users.sessions.messages.create(
+            app_id=app.id,
+            user_id=user.id,
+            session_id=session.id,
+            content=response,
+            is_user=False,
+        )
 
 
 @bot.slash_command(name="restart", description="Restart the Conversation")
 async def restart(ctx):
-    """Close the Session associated with a specific user and channel"""
     user_id = f"discord_{str(ctx.author.id)}"
-    # user = honcho.get_or_create_user(user_id)
     user = honcho.apps.users.get_or_create(name=user_id, app_id=app.id)
     location_id = str(ctx.channel_id)
-    # sessions = list(user.get_sessions_generator(location_id))
-    sessions = [
-        session
-        for session in honcho.apps.users.sessions.list(
-            user_id=user.id, app_id=app.id, is_active=True, location_id=location_id
-        )
-    ]
-    if len(sessions) > 0:
-        honcho.apps.users.sessions.delete(
-            app_id=app.id, user_id=user.id, session_id=sessions[0].id
-        )
-
-    msg = (
-        "The conversation has been restarted."
+    
+    sessions = honcho.apps.users.sessions.list(
+        app_id=app.id,
+        user_id=user.id,
+        reverse=True
     )
+    
+    sessions_list = list(sessions)
+    
+    if sessions_list:
+        # find the right session to delete
+        for session in sessions_list:
+            if session.metadata.get("location_id") == location_id:
+                honcho.apps.users.sessions.delete(
+                    app_id=app.id, user_id=user.id, session_id=session.id
+                )
+                break
+        msg = "The conversation has been restarted."
+    else:
+        msg = "No active conversation found to restart."
+    
     await ctx.respond(msg)
 
 
