@@ -1,34 +1,71 @@
 import os
-from dotenv import load_dotenv
 import discord
+import requests
+from dotenv import load_dotenv
 from honcho import Honcho
 
 load_dotenv()
+
+TOKEN = os.getenv('BOT_TOKEN')
+MODEL_NAME = os.getenv('MODEL_NAME')
+MODEL_API_KEY = os.getenv('MODEL_API_KEY')
+MODEL_ENDPOINT = os.getenv('MODEL_ENDPOINT')
+MODEL_TYPE = os.getenv('MODEL_TYPE')
+APP_NAME = os.getenv('APP_NAME')
 
 intents = discord.Intents.default()
 intents.messages = True
 intents.message_content = True
 intents.members = True
 
-app_name = "<YOUR APP NAME>"  # TODO replace with your app name
-
-# honcho = Honcho(base_url="http://localhost:8000")  # uncomment to use local server
 honcho = Honcho(environment="demo")  # uses demo server at https://demo.honcho.dev
-
-app = honcho.apps.get_or_create(name=app_name)
+app = honcho.apps.get_or_create(name=APP_NAME)
 
 bot = discord.Bot(intents=intents)
+
+def make_api_request(prompt, chat_history=None):
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {MODEL_API_KEY}"
+    }
+    
+    if MODEL_TYPE == 'chat':
+        messages = []
+        if chat_history:
+            messages.extend(chat_history)
+        messages.append({"role": "user", "content": prompt})
+        payload = {
+            "model": MODEL_NAME,
+            "messages": messages
+        }
+    else:  # completions
+        # For non-chat models, we'll concatenate the history and prompt
+        full_prompt = ""
+        if chat_history:
+            for msg in chat_history:
+                full_prompt += f"{msg['role']}: {msg['content']}\n"
+        full_prompt += f"user: {prompt}"
+        payload = {
+            "model": MODEL_NAME,
+            "prompt": full_prompt,
+            "max_tokens": 150
+        }
+
+    response = requests.post(MODEL_ENDPOINT, headers=headers, json=payload)
+    
+    if response.status_code == 200:
+        data = response.json()
+        if MODEL_TYPE == 'chat':
+            return data['choices'][0]['message']['content']
+        else:  # completions
+            return data['choices'][0]['text']
+    else:
+        return f"Error: {response.status_code} - {response.text}"
 
 
 @bot.event
 async def on_ready():
     print(f"We have logged in as {bot.user}")
-
-
-@bot.event
-async def on_member_join(member):
-    """Event that is run when a new member joins the server"""
-    await member.send(f"*Hello {member.name}, welcome to the server!")
 
 
 @bot.event
@@ -60,12 +97,15 @@ async def on_message(message):
             user_id=user.id, app_id=app.id, location_id=location_id
         )
 
-    # FIXME add logic to use session's messages
-    # history = honcho.apps.users.sessions.messages.list(
-    #     app_id=app.id,
-    #     user_id=user.id,
-    #     session_id=session.id,
-    # )
+    # Get the session's message history
+    history = [
+        message for message in 
+        honcho.apps.users.sessions.messages.list(
+            app_id=app.id,
+            user_id=user.id,
+            session_id=session.id
+        )
+    ]
 
     # Add user message to session
     input = message.content
@@ -78,7 +118,7 @@ async def on_message(message):
     )
 
     async with message.channel.typing():
-        response = "<YOUR CHAT MODEL>"  # TODO reply with logic to generate a response
+        response = make_api_request(input, history)  # Pass history to the function
         await message.channel.send(response)
 
     # Add bot message to session
@@ -111,7 +151,7 @@ async def restart(ctx):
         )
 
     msg = (
-        "Great! The conversation has been restarted. What would you like to talk about?"
+        "The conversation has been restarted."
     )
     await ctx.respond(msg)
 

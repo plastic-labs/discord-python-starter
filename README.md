@@ -3,11 +3,9 @@
 A starter template for making discord bots with
 [Honcho](https//github.com/plastic-labs/honcho) that are deployed to fly.io
 
-The main logic for the discord bot is in the `bot.py` file. It contains 3
+The main logic for the discord bot is in the `bot.py` file. It contains 2
 functions. 
 
-* `on_member_join` — the event that is run when a member joins the server the bot
-is in
 * `on_message` — the event that is run when a message is sent to the server
 the bot is in
 * `restart` — A discord slash command called restart. It is used to close the
