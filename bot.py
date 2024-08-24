@@ -1,7 +1,6 @@
 import os
 import discord
 
-# import requests
 from dotenv import load_dotenv
 from honcho import Honcho
 from openai import OpenAI
@@ -19,8 +18,6 @@ def get_env(key: str):
 BOT_TOKEN = get_env("BOT_TOKEN")
 MODEL_NAME = get_env("MODEL_NAME")
 MODEL_API_KEY = get_env("MODEL_API_KEY")
-# MODEL_ENDPOINT = get_env("MODEL_ENDPOINT")
-# MODEL_TYPE = get_env("MODEL_TYPE")
 APP_NAME = get_env("APP_NAME")
 # ALLOWED_ROLES = get_env('ALLOWED_ROLES').split(',')
 
@@ -57,34 +54,6 @@ def llm(prompt, chat_history=None):
     except Exception as e:
         print(e)
         return f"Error: {e}"
-
-
-# def make_api_request(prompt, chat_history=None):
-#     headers = {
-#         "content-type": "application/json",
-#         "x-api-key": MODEL_API_KEY,
-#         "anthropic-version": "2023-06-01",
-#     }
-#
-#     messages = []
-#     if chat_history:
-#         messages.extend([
-#             {"role": "user" if msg.is_user else "assistant", "content": msg.content}
-#             for msg in chat_history
-#         ])
-#     messages.append({"role": "user", "content": prompt})
-#
-#     print(messages)
-#
-#     payload = {"model": MODEL_NAME, "max_tokens": 1024, "messages": messages}
-#
-#     response = requests.post(MODEL_ENDPOINT, headers=headers, json=payload)
-#
-#     if response.status_code == 200:
-#         data = response.json()
-#         return data["content"][0]["text"]
-#     else:
-#         return f"Error: {response.status_code} - {response.text}"
 
 
 @bot.event
