@@ -1,18 +1,28 @@
 import os
 import discord
-import requests
+
+# import requests
 from dotenv import load_dotenv
 from honcho import Honcho
+from openai import OpenAI
 
 load_dotenv()
 
-TOKEN = os.getenv('BOT_TOKEN')
-MODEL_NAME = os.getenv('MODEL_NAME')
-MODEL_API_KEY = os.getenv('MODEL_API_KEY')
-MODEL_ENDPOINT = os.getenv('MODEL_ENDPOINT')
-MODEL_TYPE = os.getenv('MODEL_TYPE')
-APP_NAME = os.getenv('APP_NAME')
-#ALLOWED_ROLES = os.getenv('ALLOWED_ROLES').split(',')
+
+def get_env(key: str):
+    var = os.getenv(key)
+    if not var:
+        raise ValueError(f"{key} is not set in .env")
+    return var
+
+
+BOT_TOKEN = get_env("BOT_TOKEN")
+MODEL_NAME = get_env("MODEL_NAME")
+MODEL_API_KEY = get_env("MODEL_API_KEY")
+# MODEL_ENDPOINT = get_env("MODEL_ENDPOINT")
+# MODEL_TYPE = get_env("MODEL_TYPE")
+APP_NAME = get_env("APP_NAME")
+# ALLOWED_ROLES = get_env('ALLOWED_ROLES').split(',')
 
 
 intents = discord.Intents.default()
@@ -23,35 +33,58 @@ intents.members = True
 honcho = Honcho(environment="demo")  # uses demo server at https://demo.honcho.dev
 app = honcho.apps.get_or_create(name=APP_NAME)
 
+openai = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=MODEL_API_KEY)
+
 bot = discord.Bot(intents=intents)
 
-def make_api_request(prompt, chat_history=None):
-    headers = {
-        "content-type": "application/json",
-        "x-api-key": MODEL_API_KEY,
-        "anthropic-version": "2023-06-01"
-    }
-    
+
+def llm(prompt, chat_history=None):
+    extra_headers = {"X-Title": "Honcho Chatbot"}
     messages = []
     if chat_history:
-        messages.extend([{"role": "user" if msg.is_user else "assistant", "content": msg.content} for msg in chat_history])
+        messages.extend([
+            {"role": "user" if msg.is_user else "assistant", "content": msg.content}
+            for msg in chat_history
+        ])
     messages.append({"role": "user", "content": prompt})
+    try:
+        completion = openai.chat.completions.create(
+            extra_headers=extra_headers,
+            model=MODEL_NAME,
+            messages=messages,
+        )
+        return completion.choices[0].message.content
+    except Exception as e:
+        print(e)
+        return f"Error: {e}"
 
-    print(messages)
-    
-    payload = {
-        "model": MODEL_NAME,
-        "max_tokens": 1024,
-        "messages": messages
-    }
 
-    response = requests.post(MODEL_ENDPOINT, headers=headers, json=payload)
-    
-    if response.status_code == 200:
-        data = response.json()
-        return data['content'][0]['text']
-    else:
-        return f"Error: {response.status_code} - {response.text}"
+# def make_api_request(prompt, chat_history=None):
+#     headers = {
+#         "content-type": "application/json",
+#         "x-api-key": MODEL_API_KEY,
+#         "anthropic-version": "2023-06-01",
+#     }
+#
+#     messages = []
+#     if chat_history:
+#         messages.extend([
+#             {"role": "user" if msg.is_user else "assistant", "content": msg.content}
+#             for msg in chat_history
+#         ])
+#     messages.append({"role": "user", "content": prompt})
+#
+#     print(messages)
+#
+#     payload = {"model": MODEL_NAME, "max_tokens": 1024, "messages": messages}
+#
+#     response = requests.post(MODEL_ENDPOINT, headers=headers, json=payload)
+#
+#     if response.status_code == 200:
+#         data = response.json()
+#         return data["content"][0]["text"]
+#     else:
+#         return f"Error: {response.status_code} - {response.text}"
 
 
 @bot.event
@@ -71,13 +104,15 @@ async def on_message(message):
     #     return
 
     is_dm = isinstance(message.channel, discord.DMChannel)
-    is_reply_to_bot = message.reference and message.reference.resolved.author == bot.user
+    is_reply_to_bot = (
+        message.reference and message.reference.resolved.author == bot.user
+    )
     is_mention = bot.user.mentioned_in(message)
 
     if is_dm or is_reply_to_bot or is_mention:
         # Remove the bot's mention from the message content if present
-        input = message.content.replace(f'<@{bot.user.id}>', '').strip()
-        
+        input = message.content.replace(f"<@{bot.user.id}>", "").strip()
+
         # If the message is empty after removing the mention, ignore it
         if not input:
             return
@@ -91,9 +126,7 @@ async def on_message(message):
 
         # Query for active sessions with both user_id and location_id
         sessions_iter = honcho.apps.users.sessions.list(
-            app_id=app.id,
-            user_id=user.id,
-            reverse=True
+            app_id=app.id, user_id=user.id, reverse=True
         )
         sessions = list(session for session in sessions_iter)
 
@@ -109,20 +142,18 @@ async def on_message(message):
             if not session:
                 print("No session found amongst existing ones, creating new one")
                 session = honcho.apps.users.sessions.create(
-                    user_id=user.id, 
-                    app_id=app.id, 
-                    metadata={"location_id": location_id}
+                    user_id=user.id,
+                    app_id=app.id,
+                    metadata={"location_id": location_id},
                 )
                 print(session.id)
         else:
             print("No active session found")
             session = honcho.apps.users.sessions.create(
-                user_id=user.id, 
-                app_id=app.id, 
-                metadata={"location_id": location_id}
+                user_id=user.id, app_id=app.id, metadata={"location_id": location_id}
             )
             print(session.id)
-        
+
         # get messages
         history_iter = honcho.apps.users.sessions.messages.list(
             app_id=app.id, session_id=session.id, user_id=user.id
@@ -139,7 +170,7 @@ async def on_message(message):
         )
 
         async with message.channel.typing():
-            response = make_api_request(input, history)  
+            response = llm(input, history)
             await message.channel.send(response)
 
         # Add bot message to session
@@ -157,15 +188,13 @@ async def restart(ctx):
     user_id = f"discord_{str(ctx.author.id)}"
     user = honcho.apps.users.get_or_create(name=user_id, app_id=app.id)
     location_id = str(ctx.channel_id)
-    
+
     sessions = honcho.apps.users.sessions.list(
-        app_id=app.id,
-        user_id=user.id,
-        reverse=True
+        app_id=app.id, user_id=user.id, reverse=True
     )
-    
+
     sessions_list = list(sessions)
-    
+
     if sessions_list:
         # find the right session to delete
         for session in sessions_list:
@@ -177,8 +206,8 @@ async def restart(ctx):
         msg = "The conversation has been restarted."
     else:
         msg = "No active conversation found to restart."
-    
+
     await ctx.respond(msg)
 
 
-bot.run(os.environ["BOT_TOKEN"])
+bot.run(BOT_TOKEN)

@@ -11,8 +11,8 @@ package-mode = false
 python = "^3.10"
 py-cord = "^2.5.0"
 python-dotenv = "^1.0.1"
-requests = "^2.32.3"
 honcho-ai = "^0.0.14"
+openai = "^1.42.0"
 
 
 [build-system]
