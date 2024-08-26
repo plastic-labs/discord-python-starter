@@ -5,12 +5,14 @@ description = "Discord Python Starter Template"
 authors = ["Vineeth Voruganti <13438633+VVoruganti@users.noreply.github.com>"]
 license = "Apache 2.0"
 readme = "README.md"
+package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.10"
 py-cord = "^2.5.0"
-honcho-ai = "^0.0.8"
 python-dotenv = "^1.0.1"
+honcho-ai = "^0.0.14"
+openai = "^1.42.0"
 
 
 [build-system]
