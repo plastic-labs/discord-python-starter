@@ -16,14 +16,11 @@ supports all the LLMs on there
 
 ## Getting Started
 
-This project uses python with [poetry](https://python-poetry.org/) for
-dependency management. The main two dependencies are `Honcho` and
-`pycord`.
+First, install the dependencies for the project.
 
-To get started, run `poetry install`
-
-With poetry, you can start a `poetry shell` to initiate a virtual environment for
-the project.
+```bash
+uv sync
+```
 
 From here you can edit the `bot.py` file to add whatever logic you want for the
 3 methods described above. Additional functionality can be added to the bot.

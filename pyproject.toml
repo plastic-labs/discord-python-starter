@@ -1,19 +1,14 @@
-[tool.poetry]
+[project]
 name = "discord-python-starter"
 version = "0.1.0"
 description = "Discord Python Starter Template"
 authors = ["Vineeth Voruganti <13438633+VVoruganti@users.noreply.github.com>"]
 license = "Apache 2.0"
 readme = "README.md"
-
-[tool.poetry.dependencies]
-python = "^3.10"
-py-cord = "^2.5.0"
-python-dotenv = "^1.0.1"
-honcho-ai = "^0.0.14"
-openai = "^1.42.0"
-
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires-python = ">=3.10"
+dependencies = [
+    "py-cord>=2.5.0",
+    "python-dotenv>=1.0.1",
+    "honcho-ai>=0.0.19",
+    "openai>=1.42.0",
+]
