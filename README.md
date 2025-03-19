@@ -54,7 +54,8 @@ docker run --env-file .env discord-bot
 
 ## Deployment
 
-The project contains a generic `fly.toml` that will run a single process for the
-discord bot.
+To launch the bot for the first time, run `fly launch`.
+This will generate a `fly.toml` file that you can use to deploy/update the bot.
+Use `cat .env | fly secrets import` to add the environment variables to fly.
 
-To deploy the bot, run `fly deploy`
+After launching, use `fly deploy` to update your deployment.
