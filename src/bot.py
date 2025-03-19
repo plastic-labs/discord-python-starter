@@ -46,7 +46,8 @@ def llm(prompt, chat_history=None, metamessages=None):
         ])
     latest_metamessage = metamessages[-1].content if metamessages else None
     print(f"latest_metamessage: {latest_metamessage}")
-    messages.append({"role": "assistant", "content": "NOTE TO SELF: " + latest_metamessage})
+    if latest_metamessage:
+        messages.append({"role": "assistant", "content": "NOTE TO SELF: " + latest_metamessage})
 
     messages.append({"role": "user", "content": prompt})
 
