@@ -58,4 +58,7 @@ To launch the bot for the first time, run `fly launch`.
 This will generate a `fly.toml` file that you can use to deploy/update the bot.
 Use `cat .env | fly secrets import` to add the environment variables to fly.
 
+**By default, `fly.toml` will automatically stop the machine if inactive. This
+doesn't work well with a discord bot, so remove that line and change `min_machines_running` to `1`.**
+
 After launching, use `fly deploy` to update your deployment.
