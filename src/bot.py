@@ -36,7 +36,7 @@ bot = discord.Bot(intents=intents)
 
 last_message_id = ""
 
-def llm(prompt, chat_history=None, metamessages=None):
+def llm(prompt, chat_history=None):
     extra_headers = {"X-Title": "Honcho Chatbot"}
     messages = []
     if chat_history:
@@ -44,10 +44,6 @@ def llm(prompt, chat_history=None, metamessages=None):
             {"role": "user" if msg.is_user else "assistant", "content": msg.content}
             for msg in chat_history
         ])
-    latest_metamessage = metamessages[-1].content if metamessages else None
-    print(f"latest_metamessage: {latest_metamessage}")
-    messages.append({"role": "assistant", "content": "NOTE TO SELF: " + latest_metamessage})
-
     messages.append({"role": "user", "content": prompt})
 
     try:
@@ -143,14 +139,8 @@ async def on_message(message):
         )
         last_message_id = user_msg.id
 
-        # Get metamessages
-        metamessages_iter = honcho.apps.users.sessions.metamessages.list(
-            app_id=app.id, session_id=session.id, user_id=user.id
-        )
-        metamessages = list(msg for msg in metamessages_iter)
-
         async with message.channel.typing():
-            response = llm(input, history, metamessages)
+            response = llm(input, history)
 
         if len(response) > 1500:
             # Split response into chunks at newlines, keeping under 1500 chars
@@ -200,48 +190,5 @@ async def restart(ctx):
         msg = "The conversation has been restarted."
 
     await ctx.respond(msg)
-
-@bot.slash_command(name="dialectic", description="Query the Dialectic chat API")
-async def dialectic(ctx, query: str):
-    print(f"dialectic query from {ctx.author.id}: {query}")
-
-    await ctx.defer()
-
-    response = ""
-    async with ctx.typing():
-        user_id = f"discord_{str(ctx.author.id)}"
-        user = honcho.apps.users.get_or_create(name=user_id, app_id=app.id)
-        location_id = str(ctx.channel_id)
-
-        # Get or create session
-        session, _ = get_session(user.id, location_id, create=True)
-
-        if not session:
-            await ctx.respond("No active session found. Please start a conversation first.")
-            return
-
-        try:
-            # Call the Dialectic chat API
-            response = honcho.apps.users.sessions.chat(
-                app_id=app.id,
-                user_id=user.id,
-                session_id=session.id,
-                queries=query
-            )
-            response = response.content
-        except Exception as e:
-            print(f"Error calling Dialectic API: {e}")
-            response = f"Sorry, there was an error processing your request: {str(e)}"
-    await ctx.followup.send(response)
-
-    # Save the dialectic response as a metamessage in the session
-    honcho.apps.users.sessions.metamessages.create(
-        app_id=app.id,
-        user_id=user.id,
-        session_id=session.id,
-        content=response,
-        message_id=last_message_id,
-        metamessage_type="dialectic"
-    )
 
 bot.run(BOT_TOKEN)
