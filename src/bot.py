@@ -1,14 +1,14 @@
-import os
-import discord
-import schedule
-import time
-import threading
-import tempfile
-import requests
-import zipfile
 import io
+import os
 import shutil
+import tempfile
+import threading
+import time
+import zipfile
 
+import discord
+import requests
+import schedule
 from dotenv import load_dotenv
 from honcho import Honcho
 from openai import OpenAI
@@ -26,9 +26,9 @@ def get_env(key: str):
 BOT_TOKEN = get_env("BOT_TOKEN")
 MODEL_NAME = get_env("MODEL_NAME")
 MODEL_API_KEY = get_env("MODEL_API_KEY")
-APP_NAME = get_env("APP_NAME")
+APP_ID = get_env("APP_ID")
 HONCHO_URL = get_env("HONCHO_URL")
-HONCHO_JWT = get_env("HONCHO_JWT")
+HONCHO_API_KEY = get_env("HONCHO_API_KEY")
 # ALLOWED_ROLES = get_env('ALLOWED_ROLES').split(',')
 
 # Create temp directory to store repo files
@@ -89,9 +89,9 @@ intents.message_content = True
 intents.members = True
 
 honcho = Honcho(
-    base_url=HONCHO_URL, default_headers={"Authorization": f"Bearer {HONCHO_JWT}"}
+    base_url=HONCHO_URL, default_headers={"Authorization": f"Bearer {HONCHO_API_KEY}"}
 )
-app = honcho.apps.get_or_create(name=APP_NAME)
+app = honcho.apps.get(app_id=APP_ID)
 
 print(f"Honcho app acquired with id {app.id}")
 
