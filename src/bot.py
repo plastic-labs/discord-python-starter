@@ -26,7 +26,7 @@ def get_env(key: str):
 BOT_TOKEN = get_env("BOT_TOKEN")
 MODEL_NAME = get_env("MODEL_NAME")
 MODEL_API_KEY = get_env("MODEL_API_KEY")
-APP_ID = get_env("APP_ID")
+APP_NAME = get_env("APP_NAME")
 HONCHO_URL = get_env("HONCHO_URL")
 HONCHO_API_KEY = get_env("HONCHO_API_KEY")
 # ALLOWED_ROLES = get_env('ALLOWED_ROLES').split(',')
@@ -91,7 +91,7 @@ intents.members = True
 honcho = Honcho(
     base_url=HONCHO_URL, default_headers={"Authorization": f"Bearer {HONCHO_API_KEY}"}
 )
-app = honcho.apps.get(app_id=APP_ID)
+app = honcho.apps.get_or_create(name=APP_NAME)
 
 print(f"Honcho app acquired with id {app.id}")
 

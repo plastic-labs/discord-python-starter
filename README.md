@@ -48,8 +48,7 @@ and providing a single executable to start the bot. The below commands will
 build the docker image and then run the bot using a local `.env` file.
 
 ```bash
-docker build -t discord-bot .
-docker run --env-file .env discord-bot
+docker build -t discord-bot . && docker run --env-file .env discord-bot
 ```
 
 ## Deployment
