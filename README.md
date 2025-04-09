@@ -16,11 +16,14 @@ supports all the LLMs on there
 
 ## Getting Started
 
-First, install the dependencies for the project.
+This project uses python with [poetry](https://python-poetry.org/) for
+dependency management. The main two dependencies are `Honcho` and
+`pycord`.
 
-```bash
-uv sync
-```
+To get started, run `poetry install`
+
+With poetry, you can start a `poetry shell` to initiate a virtual environment for
+the project.
 
 From here you can edit the `bot.py` file to add whatever logic you want for the
 3 methods described above. Additional functionality can be added to the bot.
@@ -48,7 +51,8 @@ and providing a single executable to start the bot. The below commands will
 build the docker image and then run the bot using a local `.env` file.
 
 ```bash
-docker build -t discord-bot . && docker run --env-file .env discord-bot
+docker build -t discord-bot .
+docker run --env-file .env discord-bot
 ```
 
 ## Deployment
@@ -56,10 +60,4 @@ docker build -t discord-bot . && docker run --env-file .env discord-bot
 The project contains a generic `fly.toml` that will run a single process for the
 discord bot.
 
-To launch the bot for the first time, run `fly launch`.
-Use `cat .env | fly secrets import` to add the environment variables to fly.
-
-**By default, `fly.toml` will automatically stop the machine if inactive. This
-doesn't work well with a discord bot, so remove that line and change `min_machines_running` to `1`.**
-
-After launching, use `fly deploy` to update your deployment.
+To deploy the bot, run `fly deploy`

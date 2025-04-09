@@ -1,22 +1,6 @@
-# fly.toml app configuration file generated for honcho-bot on 2025-03-24T18:00:59-04:00
-#
-# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
-#
+primary_region = "bos"
+kill_signal = "SIGINT"
+kill_timeout = "5s"
 
-app = 'honcho-bot'
-primary_region = 'ewr'
-
-[build]
-
-[http_service]
-  internal_port = 8080
-  force_https = true
-  auto_start_machines = true
-  min_machines_running = 1
-  max_machines_running = 1
-  processes = ['app']
-
-[[vm]]
-  memory = '1gb'
-  cpu_kind = 'shared'
-  cpus = 1
+[processes]
+discord = "python -u -m bot.app"
