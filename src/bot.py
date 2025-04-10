@@ -159,15 +159,6 @@ async def on_message(message):
         )
         history = list(msg for msg in history_iter)
 
-        # Add user message to session
-        honcho.apps.users.sessions.messages.create(
-            app_id=app.id,
-            user_id=user.id,
-            session_id=session.id,
-            content=input,
-            is_user=True,
-        )
-
         async with message.channel.typing():
             response = llm(input, history)
 
@@ -188,6 +179,15 @@ async def on_message(message):
                 await message.channel.send(chunk)
         else:
             await message.channel.send(response)
+
+        # Add user message to session
+        honcho.apps.users.sessions.messages.create(
+            app_id=app.id,
+            user_id=user.id,
+            session_id=session.id,
+            content=input,
+            is_user=True,
+        )
 
         # Add bot message to session
         honcho.apps.users.sessions.messages.create(
