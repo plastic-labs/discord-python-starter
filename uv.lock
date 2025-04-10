@@ -1,5 +1,4 @@
 version = 1
-revision = 1
 requires-python = ">=3.10"
 
 [[package]]
@@ -241,7 +240,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "honcho-ai", specifier = ">=0.0.19" },
+    { name = "honcho-ai", git = "https://github.com/plastic-labs/honcho-python.git?rev=6f069513e70b3a3600deb09e8eb021337944569f#6f069513e70b3a3600deb09e8eb021337944569f" },
     { name = "openai", specifier = ">=1.42.0" },
     { name = "py-cord", specifier = ">=2.5.0" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
@@ -348,7 +347,7 @@ wheels = [
 [[package]]
 name = "honcho-ai"
 version = "0.0.19"
-source = { registry = "https://pypi.org/simple" }
+source = { git = "https://github.com/plastic-labs/honcho-python.git?rev=6f069513e70b3a3600deb09e8eb021337944569f#6f069513e70b3a3600deb09e8eb021337944569f" }
 dependencies = [
     { name = "anyio" },
     { name = "distro" },
@@ -356,10 +355,6 @@ dependencies = [
     { name = "pydantic" },
     { name = "sniffio" },
     { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/84/05/93e00896f17de630cca676f08a52e91cb867fc18013713b2c9d6db531cb9/honcho_ai-0.0.19.tar.gz", hash = "sha256:3a210fa452ecdef02614e35e57433c83bfa5ca75e4daf887301aee5946245e70", size = 268214 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/c0/fa/d680c1428658f1bd963e7fdb3ff126f8667760cf6df2a03cc0bdc6cbe563/honcho_ai-0.0.19-py3-none-any.whl", hash = "sha256:97aefa5516d8426635bd9cfd32362f49501173f311df15eaa9644f6c5f4d8600", size = 110663 },
 ]
 
 [[package]]
@@ -802,7 +797,7 @@ name = "tqdm"
 version = "4.67.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "colorama", marker = "platform_system == 'Windows'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a8/4b/29b4ef32e036bb34e4ab51796dd745cdba7ed47ad142a9f4a1eb8e0c744d/tqdm-4.67.1.tar.gz", hash = "sha256:f8aef9c52c08c13a65f30ea34f4e5aac3fd1a34959879d7e59e63027286627f2", size = 169737 }
 wheels = [
