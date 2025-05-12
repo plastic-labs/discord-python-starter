@@ -1,14 +1,6 @@
-import io
 import os
-import shutil
-import tempfile
-import threading
-import time
-import zipfile
 
 import discord
-import requests
-import schedule
 from dotenv import load_dotenv
 from honcho import Honcho
 from openai import OpenAI
@@ -27,9 +19,6 @@ BOT_TOKEN = get_env("BOT_TOKEN")
 MODEL_NAME = get_env("MODEL_NAME")
 MODEL_API_KEY = get_env("MODEL_API_KEY")
 APP_NAME = get_env("APP_NAME")
-HONCHO_URL = get_env("HONCHO_URL", "http://localhost:8000")
-HONCHO_API_KEY = get_env("HONCHO_API_KEY")
-# ALLOWED_ROLES = get_env('ALLOWED_ROLES').split(',')
 
 
 intents = discord.Intents.default()
@@ -37,12 +26,35 @@ intents.messages = True
 intents.message_content = True
 intents.members = True
 
-honcho = Honcho(
-    base_url=HONCHO_URL, default_headers={"Authorization": f"Bearer {HONCHO_API_KEY}"}
-)
+honcho = Honcho()
 app = honcho.apps.get_or_create(name=APP_NAME)
 
 print(f"Honcho app acquired with id {app.id}")
+
+# user = honcho.apps.users.get_or_create(app_id=app.id, name="hello")
+# session = honcho.apps.users.sessions.create(app_id=app.id, user_id=user.id)
+
+# transaction_id = honcho.transactions.begin()
+
+# with Honcho(transaction_id=transaction_id) as honcho_txn:
+#     message = honcho_txn.apps.users.sessions.messages.create(
+#         app_id=app.id,
+#         session_id=session.id,
+#         user_id=user.id,
+#         is_user=True,
+#         content="Hello, how are you?",
+#     )
+
+
+# # before commit, the message is not visible
+# messages = honcho.apps.users.sessions.messages.list(app_id=app.id, session_id=session.id, user_id=user.id)
+# assert messages.total == 0
+
+# honcho.transactions.commit(transaction_id)
+
+# # after commit, the message is visible
+# messages = honcho.apps.users.sessions.messages.list(app_id=app.id, session_id=session.id, user_id=user.id)
+# assert messages.total == 1
 
 openai = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=MODEL_API_KEY)
 
@@ -164,6 +176,7 @@ async def on_message(message):
 
         if len(response) > 1500:
             # Split response into chunks at newlines, keeping under 1500 chars
+            # This is for discord's default message limit
             chunks = []
             current_chunk = ""
             for line in response.splitlines(keepends=True):
