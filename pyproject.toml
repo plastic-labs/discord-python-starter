@@ -2,7 +2,7 @@
 name = "discord-python-starter"
 version = "0.1.0"
 description = "Discord Python Starter Template"
-authors = ["Vineeth Voruganti <13438633+VVoruganti@users.noreply.github.com>", "Ben <ben@plasticlabs.ai"]
+authors = ["Vineeth Voruganti <13438633+VVoruganti@users.noreply.github.com>", "Ben <ben@plasticlabs.ai>"]
 license = "Apache 2.0"
 readme = "README.md"
 requires-python = ">=3.10,<3.12"
