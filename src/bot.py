@@ -49,26 +49,14 @@ openai = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=MODEL_API_KEY)
 bot = discord.Bot(intents=intents)
 
 
-def llm(prompt, previous_chats=None):
+def llm(prompt, chat_history=None):
+    extra_headers = {"X-Title": "Honcho Chatbot"}
     messages = []
-
-    # Add system message with documentation context
-    messages.append(
-        {
-            "role": "system",
-            "content": f"You are a helpful assistant."
-        }
-    )
-
-    if previous_chats:
-        messages.extend(
-            [
-                {"role": "user" if msg.is_user else "assistant", "content": msg.content}
-                for msg in previous_chats
-            ]
-        )
-
-
+    if chat_history:
+        messages.extend([
+            {"role": "user" if msg.is_user else "assistant", "content": msg.content}
+            for msg in chat_history
+        ])
     messages.append({"role": "user", "content": prompt})
 
     try:
@@ -222,7 +210,5 @@ async def restart(ctx):
         msg = "The conversation has been restarted."
 
     await ctx.respond(msg)
-
-
 
 bot.run(BOT_TOKEN)
