@@ -1,17 +1,10 @@
-import io
 import os
-import shutil
-import tempfile
-import threading
-import time
-import zipfile
 
 import discord
-import requests
-import schedule
 from dotenv import load_dotenv
 from honcho import Honcho
 from openai import OpenAI
+from honcho_utils import get_session, honcho_transaction
 
 load_dotenv()
 
@@ -27,9 +20,6 @@ BOT_TOKEN = get_env("BOT_TOKEN")
 MODEL_NAME = get_env("MODEL_NAME")
 MODEL_API_KEY = get_env("MODEL_API_KEY")
 APP_NAME = get_env("APP_NAME")
-HONCHO_URL = get_env("HONCHO_URL", "http://localhost:8000")
-HONCHO_API_KEY = get_env("HONCHO_API_KEY")
-# ALLOWED_ROLES = get_env('ALLOWED_ROLES').split(',')
 
 
 intents = discord.Intents.default()
@@ -37,12 +27,8 @@ intents.messages = True
 intents.message_content = True
 intents.members = True
 
-honcho = Honcho(
-    base_url=HONCHO_URL, default_headers={"Authorization": f"Bearer {HONCHO_API_KEY}"}
-)
+honcho = Honcho()
 app = honcho.apps.get_or_create(name=APP_NAME)
-
-print(f"Honcho app acquired with id {app.id}")
 
 openai = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=MODEL_API_KEY)
 
@@ -70,32 +56,6 @@ def llm(prompt, chat_history=None):
         return f"Error: {e}"
 
 
-def get_session(user_id, location_id, create=False):
-    """Get an existing session for the user and location or optionally create a new one if none exists.
-    Returns a tuple of (session, is_new) where is_new indicates if a new session was created."""
-    # Query for *active* sessions with both user_id and location_id
-    sessions_iter = honcho.apps.users.sessions.list(
-        app_id=app.id, user_id=user_id, reverse=True, is_active=True
-    )
-    sessions = list(session for session in sessions_iter)
-
-    # Find the right session
-    for session in sessions:
-        if session.metadata.get("location_id") == location_id:
-            return session, False
-
-    # If no session is found and create is True, create a new one
-    if create:
-        print("No active session found, creating new one")
-        return honcho.apps.users.sessions.create(
-            user_id=user_id,
-            app_id=app.id,
-            metadata={"location_id": location_id},
-        ), True
-
-    return None, False
-
-
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
@@ -108,10 +68,6 @@ async def on_message(message):
     if message.author == bot.user:
         # ensure the bot does not reply to itself
         return
-
-    # if str(message.author.id) not in ALLOWED_ROLES:
-    #     # ignore messages from users not in the allowed list
-    #     return
 
     is_dm = isinstance(message.channel, discord.DMChannel)
     is_reply_to_bot = (
@@ -136,7 +92,7 @@ async def on_message(message):
         location_id = str(message.channel.id)
 
         # Get or create a session for this user and location
-        session, is_new = get_session(user.id, location_id, create=True)
+        session, is_new = get_session(honcho, app.id, user.id, {"location_id": location_id}, create=True)
 
         if is_new:
             print(f"New session created for {message.author.name} in {location_id}")
@@ -152,6 +108,7 @@ async def on_message(message):
 
         if len(response) > 1500:
             # Split response into chunks at newlines, keeping under 1500 chars
+            # This is for discord's default message limit
             chunks = []
             current_chunk = ""
             for line in response.splitlines(keepends=True):
@@ -168,23 +125,26 @@ async def on_message(message):
         else:
             await message.channel.send(response)
 
-        # Add user message to session
-        honcho.apps.users.sessions.messages.create(
-            app_id=app.id,
-            user_id=user.id,
-            session_id=session.id,
-            content=input,
-            is_user=True,
-        )
+        # Both messages are added to the session in a transaction
+        with honcho_transaction(honcho) as honcho_txn:
+            # Add user message to session
+            honcho_txn.apps.users.sessions.messages.create(
+                app_id=app.id,
+                user_id=user.id,
+                session_id=session.id,
+                content=input,
+                is_user=True,
+            )
 
-        # Add bot message to session
-        honcho.apps.users.sessions.messages.create(
-            app_id=app.id,
-            user_id=user.id,
-            session_id=session.id,
-            content=response,
-            is_user=False,
-        )
+            # Add bot message to session
+            honcho_txn.apps.users.sessions.messages.create(
+                app_id=app.id,
+                user_id=user.id,
+                session_id=session.id,
+                content=response,
+                is_user=False,
+            )
+
 
 
 @bot.slash_command(
@@ -194,12 +154,13 @@ async def on_message(message):
 async def restart(ctx):
     print(f"restarting conversation for {ctx.author.name}")
     async with ctx.typing():
+        # Get user
         user_name = f"discord_{str(ctx.author.id)}"
         user = honcho.apps.users.get_or_create(name=user_name, app_id=app.id)
         location_id = str(ctx.channel_id)
 
         # Get existing session
-        session, _ = get_session(user.id, location_id, create=False)
+        session, _ = get_session(honcho, app.id, user.id, {"location_id": location_id}, create=False)
 
         if session:
             # Delete the session
