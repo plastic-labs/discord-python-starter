@@ -48,8 +48,7 @@ and providing a single executable to start the bot. The below commands will
 build the docker image and then run the bot using a local `.env` file.
 
 ```bash
-docker build -t discord-bot .
-docker run --env-file .env discord-bot
+docker build -t discord-bot . && docker run --env-file .env discord-bot
 ```
 
 ## Deployment
@@ -57,4 +56,10 @@ docker run --env-file .env discord-bot
 The project contains a generic `fly.toml` that will run a single process for the
 discord bot.
 
-To deploy the bot, run `fly deploy`
+To launch the bot for the first time, run `fly launch`.
+Use `cat .env | fly secrets import` to add the environment variables to fly.
+
+**By default, `fly.toml` will automatically stop the machine if inactive. This
+doesn't work well with a discord bot, so remove that line and change `min_machines_running` to `1`.**
+
+After launching, use `fly deploy` to update your deployment.

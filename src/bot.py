@@ -1,6 +1,14 @@
+import io
 import os
-import discord
+import shutil
+import tempfile
+import threading
+import time
+import zipfile
 
+import discord
+import requests
+import schedule
 from dotenv import load_dotenv
 from honcho import Honcho
 from openai import OpenAI
@@ -8,10 +16,10 @@ from openai import OpenAI
 load_dotenv()
 
 
-def get_env(key: str):
+def get_env(key: str, default: str = None):
     var = os.getenv(key)
     if not var:
-        raise ValueError(f"{key} is not set in .env")
+        return default
     return var
 
 
@@ -19,6 +27,8 @@ BOT_TOKEN = get_env("BOT_TOKEN")
 MODEL_NAME = get_env("MODEL_NAME")
 MODEL_API_KEY = get_env("MODEL_API_KEY")
 APP_NAME = get_env("APP_NAME")
+HONCHO_URL = get_env("HONCHO_URL", "http://localhost:8000")
+HONCHO_API_KEY = get_env("HONCHO_API_KEY")
 # ALLOWED_ROLES = get_env('ALLOWED_ROLES').split(',')
 
 
@@ -27,14 +37,17 @@ intents.messages = True
 intents.message_content = True
 intents.members = True
 
-honcho = Honcho(environment="demo")  # uses demo server at https://demo.honcho.dev
+honcho = Honcho(
+    base_url=HONCHO_URL, default_headers={"Authorization": f"Bearer {HONCHO_API_KEY}"}
+)
 app = honcho.apps.get_or_create(name=APP_NAME)
+
+print(f"Honcho app acquired with id {app.id}")
 
 openai = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=MODEL_API_KEY)
 
 bot = discord.Bot(intents=intents)
 
-last_message_id = ""
 
 def llm(prompt, chat_history=None):
     extra_headers = {"X-Title": "Honcho Chatbot"}
@@ -48,7 +61,6 @@ def llm(prompt, chat_history=None):
 
     try:
         completion = openai.chat.completions.create(
-            extra_headers=extra_headers,
             model=MODEL_NAME,
             messages=messages,
         )
@@ -56,6 +68,7 @@ def llm(prompt, chat_history=None):
     except Exception as e:
         print(e)
         return f"Error: {e}"
+
 
 def get_session(user_id, location_id, create=False):
     """Get an existing session for the user and location or optionally create a new one if none exists.
@@ -82,15 +95,16 @@ def get_session(user_id, location_id, create=False):
 
     return None, False
 
+
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
     print("Waiting for messages...")
 
+
 @bot.event
 async def on_message(message):
     """Event that is run when a message is sent in a channel or DM that the bot has access to"""
-    global last_message_id
     if message.author == bot.user:
         # ensure the bot does not reply to itself
         return
@@ -117,27 +131,21 @@ async def on_message(message):
         user_id = f"discord_{str(message.author.id)}"
         user = honcho.apps.users.get_or_create(name=user_id, app_id=app.id)
 
-        # Use the channel ID as the location_id (for DMs, this will be unique to the user)
+        # Sessions are based on channel, not thread.
+        # If in a thread, get the parent channel id
         location_id = str(message.channel.id)
 
         # Get or create a session for this user and location
-        session, _ = get_session(user.id, location_id, create=True)
+        session, is_new = get_session(user.id, location_id, create=True)
+
+        if is_new:
+            print(f"New session created for {message.author.name} in {location_id}")
 
         # Get messages
         history_iter = honcho.apps.users.sessions.messages.list(
             app_id=app.id, session_id=session.id, user_id=user.id
         )
         history = list(msg for msg in history_iter)
-
-        # Add user message to session
-        user_msg = honcho.apps.users.sessions.messages.create(
-            app_id=app.id,
-            user_id=user.id,
-            session_id=session.id,
-            content=input,
-            is_user=True,
-        )
-        last_message_id = user_msg.id
 
         async with message.channel.typing():
             response = llm(input, history)
@@ -154,10 +162,20 @@ async def on_message(message):
                     current_chunk += line
             if current_chunk:
                 chunks.append(current_chunk)
+
             for chunk in chunks:
                 await message.channel.send(chunk)
         else:
             await message.channel.send(response)
+
+        # Add user message to session
+        honcho.apps.users.sessions.messages.create(
+            app_id=app.id,
+            user_id=user.id,
+            session_id=session.id,
+            content=input,
+            is_user=True,
+        )
 
         # Add bot message to session
         honcho.apps.users.sessions.messages.create(
@@ -168,12 +186,16 @@ async def on_message(message):
             is_user=False,
         )
 
-@bot.slash_command(name="restart", description="Restart the Conversation")
+
+@bot.slash_command(
+    name="restart",
+    description="Reset all of your messaging history with Honcho in this channel.",
+)
 async def restart(ctx):
-    print(f"restarting conversation for {ctx.author.id}")
+    print(f"restarting conversation for {ctx.author.name}")
     async with ctx.typing():
-        user_id = f"discord_{str(ctx.author.id)}"
-        user = honcho.apps.users.get_or_create(name=user_id, app_id=app.id)
+        user_name = f"discord_{str(ctx.author.id)}"
+        user = honcho.apps.users.get_or_create(name=user_name, app_id=app.id)
         location_id = str(ctx.channel_id)
 
         # Get existing session
@@ -182,9 +204,7 @@ async def restart(ctx):
         if session:
             # Delete the session
             honcho.apps.users.sessions.delete(
-                app_id=app.id,
-                user_id=user.id,
-                session_id=session.id
+                app_id=app.id, user_id=user.id, session_id=session.id
             )
 
         msg = "The conversation has been restarted."
