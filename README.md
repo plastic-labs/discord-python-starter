@@ -41,9 +41,17 @@ cp .env.template .env
 > control. These should remain secret. By default the included `.gitignore` file
 > should prevent this.
 
+
+### Run locally
+
+```bash
+source .venv/bin/activate
+python src/bot.py
+```
+
 ### Docker
 
-The project uses [Docker](https://www.docker.com/) for packaging the bot code
+The project offers [Docker](https://www.docker.com/) for packaging the bot code
 and providing a single executable to start the bot. The below commands will
 build the docker image and then run the bot using a local `.env` file.
 
