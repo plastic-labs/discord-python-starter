@@ -16,6 +16,8 @@ load_dotenv()
 
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_PROMPT = os.getenv("BOT_PROMPT")
+BOT_NAME = os.getenv("BOT_NAME", "HONCHO").upper()
 MODEL_NAME = os.getenv("MODEL_NAME")
 MODEL_API_KEY = os.getenv("MODEL_API_KEY")
 APP_NAME = os.getenv("APP_NAME")
@@ -27,6 +29,39 @@ app = honcho_client.apps.get_or_create(name=APP_NAME)
 logger.info(f"Honcho app acquired with id {app.id}")
 
 openai = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=MODEL_API_KEY)
+
+
+def load_system_prompt() -> str:
+    """Load system prompt from prompt.md file or inline string."""
+    prompt = None
+    
+    if not BOT_PROMPT:
+        prompt = "You are a helpful Discord bot assistant."
+        logger.info("Using default system prompt")
+    elif BOT_PROMPT == "prompt.md":
+        try:
+            if os.path.exists("prompt.md"):
+                with open("prompt.md", 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
+                    if content:
+                        prompt = content
+                        logger.info("Loaded prompt from prompt.md")
+            if not prompt:
+                logger.warning("Prompt file prompt.md not found")
+        except Exception as e:
+            logger.warning(f"Could not load prompt.md: {e}")
+    else:
+        prompt = BOT_PROMPT
+        logger.info(f"Using inline prompt ({len(BOT_PROMPT)} chars)")
+    
+    if not prompt:
+        prompt = "You are a helpful Discord bot assistant."
+        logger.info("Using fallback system prompt")
+    
+    prompt = prompt.strip()
+    logger.info(f"Prompt preview: {prompt[:50]}{'...' if len(prompt) > 50 else ''}")
+    
+    return prompt
 
 intents = discord.Intents.default()
 intents.messages = True
@@ -43,6 +78,11 @@ def llm(prompt, chat_history=None) -> str:
     """
     extra_headers = {"X-Title": "Honcho Chatbot"}
     messages = []
+    
+    # Load and add system prompt
+    system_prompt = load_system_prompt()
+    messages.append({"role": "system", "content": system_prompt})
+    
     if chat_history:
         messages.extend(
             [
