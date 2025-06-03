@@ -36,6 +36,13 @@ variables used by the discord bot. Make a copy of this template and fill out the
 cp .env.template .env
 ```
 
+#### Bot Prompt
+
+The bot supports two ways of defeining custom prompts via the `BOT_PROMPT` environment variable:
+
+- **File-based**: Set `BOT_PROMPT=prompt.md` to load character definitions from `prompt.md`
+- **Inline**: Set `BOT_PROMPT="Your custom prompt text"` for simple prompts
+
 > [!CAUTION]
 > Make sure you do not push your `.env` file to GitHub or any other version
 > control. These should remain secret. By default the included `.gitignore` file
@@ -57,6 +64,12 @@ build the docker image and then run the bot using a local `.env` file.
 
 ```bash
 docker build -t discord-bot . && docker run --env-file .env discord-bot
+```
+
+For development, add `--rm` to automatically clean up the container when it stops:
+
+```bash
+docker build -t discord-bot . && docker run --rm --env-file .env discord-bot
 ```
 
 ## Deployment

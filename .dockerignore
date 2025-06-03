@@ -2,6 +2,7 @@ fly.toml
 .env
 .env.template
 *.md
+!prompt.md
 docs/**
 .DS_Store
 supabase/**

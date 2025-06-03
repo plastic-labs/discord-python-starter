@@ -2,6 +2,9 @@
 # https://testdriven.io/blog/docker-best-practices/
 FROM python:3.11-slim-bullseye
 
+# Install git for dependencies that require it
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
 COPY --from=ghcr.io/astral-sh/uv:0.4.9 /uv /bin/uv
 
 # Set Working directory
@@ -34,6 +37,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 ENV PATH="/app/.venv/bin:$PATH"
 
 COPY --chown=app:app src/ /app/src/
+COPY --chown=app:app prompt.md /app/
 
 # https://stackoverflow.com/questions/29663459/python-app-does-not-print-anything-when-running-detached-in-docker
 CMD ["python", "-u", "src/bot.py"]
