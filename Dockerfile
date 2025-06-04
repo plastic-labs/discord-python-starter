@@ -7,6 +7,9 @@ COPY --from=ghcr.io/astral-sh/uv:0.4.9 /uv /bin/uv
 # Set Working directory
 WORKDIR /app
 
+# Install git (needed for honcho-ai dependency from GitHub)
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
 RUN addgroup --system app && adduser --system --group app
 RUN chown -R app:app /app
 USER app
@@ -34,6 +37,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 ENV PATH="/app/.venv/bin:$PATH"
 
 COPY --chown=app:app src/ /app/src/
+
+# Copy opus configuration files
+COPY --chown=app:app opus_base_context.json opus_system_prompt.txt /app/
 
 # https://stackoverflow.com/questions/29663459/python-app-does-not-print-anything-when-running-detached-in-docker
 CMD ["python", "-u", "src/bot.py"]

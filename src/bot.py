@@ -34,6 +34,11 @@ if not MODEL_NAME:
 # Token configuration
 MAX_TOKENS = int(os.getenv("MAX_TOKENS", "1024"))
 
+# Bot name and topic configuration for intelligent responses
+BOT_NAME = os.getenv("BOT_NAME", "Assistant").strip('"')
+BOT_NAME_VARIANTS = os.getenv("BOT_NAME_VARIANTS", "").strip('"')
+BOT_TOPICS = os.getenv("BOT_TOPICS", "").strip('"')
+
 APP_NAME = os.getenv("APP_NAME")
 
 # System prompt configuration - can be from env var or file
@@ -43,7 +48,7 @@ SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", "You are a helpful AI assistant.")
 BASE_CONTEXT_FILE = os.getenv("BASE_CONTEXT_FILE", "base_context.json")
 
 # Rate limiting configuration
-RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "10"))
+RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "1"))
 RATE_LIMIT_MESSAGE = os.getenv(
     "RATE_LIMIT_MESSAGE",
     "⏰ I'm responding too quickly! Please wait a moment before asking again.",
@@ -56,11 +61,48 @@ response_timestamps = defaultdict(lambda: deque())
 # Per-channel rate limits loaded from config file
 channel_rate_limits = {}
 
+
+def _build_name_variants():
+    """Build set of bot name variants for intelligent message detection"""
+    variants = set()
+
+    # Add configured variants
+    if BOT_NAME_VARIANTS:
+        for variant in BOT_NAME_VARIANTS.split(","):
+            clean_variant = variant.strip()
+            if clean_variant:
+                variants.add(clean_variant.lower())
+
+    # Add bot name variants
+    if BOT_NAME:
+        variants.add(BOT_NAME.lower())
+
+    return list(variants)
+
+
+def _build_topics():
+    """Build set of topics the bot should respond to"""
+    topics = set()
+    if BOT_TOPICS:
+        for topic in BOT_TOPICS.split(","):
+            clean_topic = topic.strip()
+            if clean_topic:
+                topics.add(clean_topic.lower())
+    return list(topics)
+
+
+# Build variants and topics at startup
+NAME_VARIANTS = _build_name_variants()
+TOPIC_VARIANTS = _build_topics()
+
 honcho_client = Honcho()
 app = honcho_client.apps.get_or_create(name=APP_NAME)
 
 logger.info(f"Honcho app acquired with id {app.id}")
 logger.info(f"Max tokens per response: {MAX_TOKENS}")
+logger.info(
+    f"Bot configured with {len(NAME_VARIANTS)} name variants and {len(TOPIC_VARIANTS)} topic variants"
+)
 
 
 def load_system_prompt():
@@ -189,12 +231,15 @@ def llm(prompt, chat_history=None) -> str:
         # Add current user message
         messages.append({"role": "user", "content": prompt})
 
+        # Create token-aware system prompt
+        token_aware_prompt = f"{SYSTEM_PROMPT}\n\nIMPORTANT: You have a strict limit of {MAX_TOKENS} tokens for your response. Keep your answers concise and complete within this limit. If you need to provide a long response, prioritize the most important information and indicate if there's more to discuss."
+
         if API_PROVIDER == "anthropic":
             # Call Anthropic API
             response = anthropic_client.messages.create(
                 model=MODEL_NAME,
                 max_tokens=MAX_TOKENS,
-                system=SYSTEM_PROMPT,
+                system=token_aware_prompt,
                 messages=messages,
             )
             return response.content[0].text
@@ -202,7 +247,7 @@ def llm(prompt, chat_history=None) -> str:
         elif API_PROVIDER == "openai":
             # Call OpenAI API (or OpenAI-compatible APIs like OpenRouter)
             # For OpenAI, system prompt goes in messages array
-            openai_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+            openai_messages = [{"role": "system", "content": token_aware_prompt}]
             openai_messages.extend(messages)
 
             response = openai_client.chat.completions.create(
@@ -218,12 +263,10 @@ def llm(prompt, chat_history=None) -> str:
 def validate_message(message) -> bool:
     """
     Determine if the message is valid for the bot to respond to.
-    Return True if it is, False otherwise. Currently, the bot will
-    only respond to messages that tag it with an @mention in a
-    public channel and are not from the bot itself.
+    Returns True if the message is a direct @mention in a public channel
+    and is not from the bot itself.
     """
     if message.author == bot.user:
-        # ensure the bot does not reply to itself
         return False
 
     if isinstance(message.channel, discord.DMChannel):
@@ -233,6 +276,32 @@ def validate_message(message) -> bool:
         return False
 
     return True
+
+
+def relevant_message(message) -> bool:
+    """
+    Determine if the message contains references to the bot that
+    warrant a response even without @mention. Checks for bot name
+    variants configured in BOT_NAME_VARIANTS and topics from BOT_TOPICS.
+    """
+    if message.author == bot.user:
+        return False
+
+    if isinstance(message.channel, discord.DMChannel):
+        return False
+
+    content = message.content.lower()
+    return any(variant in content for variant in NAME_VARIANTS) or any(
+        topic in content for topic in TOPIC_VARIANTS
+    )
+
+
+def should_respond(message) -> bool:
+    """
+    Determine if the bot should respond to this message.
+    Responds to either direct @mentions or relevant messages.
+    """
+    return validate_message(message) or relevant_message(message)
 
 
 def sanitize_message(message) -> str | None:
@@ -295,7 +364,7 @@ async def on_message(message):
     """
     Receive a message from Discord and respond with a message from our LLM assistant.
     """
-    if not validate_message(message):
+    if not should_respond(message):
         return
 
     input = sanitize_message(message)
@@ -315,7 +384,7 @@ async def on_message(message):
 
     # Get messages
     history_iter = honcho_client.apps.users.sessions.messages.list(
-        app_id=app.id, session_id=session.id, user_id=user.id
+        app_id=app.id, session_id=session.id, user_id=user.id, size=10
     )
     history = list(msg for msg in history_iter)
 
