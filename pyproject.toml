@@ -10,6 +10,7 @@ dependencies = [
     "py-cord>=2.5.0",
     "python-dotenv>=1.0.1",
     "honcho-ai @ git+https://github.com/plastic-labs/honcho-python.git@6f069513e70b3a3600deb09e8eb021337944569f",
+    "anthropic>=0.34.0",
     "openai>=1.42.0",
     "schedule>=1.2.2",
     "requests>=2.32.3",
