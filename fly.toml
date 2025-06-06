@@ -1,21 +1,23 @@
-# fly.toml app configuration file generated for honcho-bot on 2025-03-24T18:00:59-04:00
+# fly.toml app configuration file generated for discord-python-starter-crimson-dream-4894 on 2025-06-05T12:02:54+01:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'honcho-bot'
-primary_region = 'ewr'
+app = 'discord-python-starter-crimson-dream-4894'
+primary_region = 'lhr'
 
 [build]
 
-[http_service]
-  internal_port = 8080
-  force_https = true
-  auto_start_machines = true
-  min_machines_running = 1
-  processes = ['app']
+# Discord bots don't serve HTTP, they're background processes
+[processes]
+  app = "python -u src/bot.py"
 
 [[vm]]
   memory = '1gb'
   cpu_kind = 'shared'
   cpus = 1
+  processes = ['app']
+
+# Keep at least one machine running
+[deploy]
+  strategy = "immediate"

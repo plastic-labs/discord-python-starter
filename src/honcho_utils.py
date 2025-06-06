@@ -34,10 +34,13 @@ def get_session(
     # If no session is found and create is True, create a new one
     if create:
         print("No active session found, creating new one")
-        return honcho.apps.users.sessions.create(
-            user_id=user_id,
-            app_id=app_id,
-            metadata=custom_metadata,
-        ), True
+        return (
+            honcho.apps.users.sessions.create(
+                user_id=user_id,
+                app_id=app_id,
+                metadata=custom_metadata,
+            ),
+            True,
+        )
 
     return None, False

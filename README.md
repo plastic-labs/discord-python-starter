@@ -1,73 +1,325 @@
 # discord-python-starter
 
-A starter template for making discord bots with
-[Honcho](https//github.com/plastic-labs/honcho) that are deployed to fly.io
+A starter template for Discord bots with [Honcho](https://github.com/plastic-labs/honcho) memory management, deployable to Fly.io.
 
-The main logic for the discord bot is in the `bot.py` file. It contains 2
-functions.
+## Features
 
-- `on_message` — the event that is run when a message is sent to the server
-  the bot is in
-- `restart` — A discord slash command called restart. It is used to close the
-  `session` and create a new one
+- 🤖 **Multi-provider support**: Anthropic, OpenAI, and OpenRouter
+- 🧠 **Memory management**: Persistent conversation history via Honcho
+- 🎭 **Custom personalities**: System prompts and base context
+- 🧪 **Intelligent responses**: Responds to name variants and topics without @mentions
+- ⏰ **Rate limiting**: Global and per-channel limits
+- 📁 **File-based config**: System prompts and rate limits from files
+- 🔧 **Easy deployment**: Ready for Fly.io with Docker
 
-The template uses [openrouter](https://openrouter.ai) for LLM inferences and
-supports all the LLMs on there
+## Quick Start
 
-## Getting Started
+1. **Install dependencies:**
+   ```bash
+   uv sync
+   ```
 
-First, install the dependencies for the project.
+2. **Choose configuration:**
+   ```bash
+   # Anthropic (recommended)
+   cp env.example .env
+   
+   # OpenAI
+   cp env.openai.example .env
+   
+   # OpenRouter (multiple models)
+   cp env.openrouter.example .env
+   ```
 
-```bash
-uv sync
-```
+3. **Set up base context:**
+   ```bash
+   cp base_context.example.json base_context.json
+   # Edit with your agent's personality
+   ```
 
-From here you can edit the `bot.py` file to add whatever logic you want for the
-3 methods described above. Additional functionality can be added to the bot.
-Refer to the [py-cord documentation](https://pycord.dev)
+4. **Run locally:**
+   ```bash
+   source .venv/bin/activate
+   python src/bot.py
+   ```
+
+## Configuration
 
 ### Environment Variables
 
-The repo contains a `.env.template` file that shows all the default environment
-variables used by the discord bot. Make a copy of this template and fill out the
-`.env` with your own values.
+Key configuration options:
 
 ```bash
-cp .env.template .env
+# Discord & API
+BOT_TOKEN=your_discord_bot_token
+API_PROVIDER=anthropic  # or "openai"
+ANTHROPIC_API_KEY=your_key  # if using Anthropic
+OPENAI_API_KEY=your_key     # if using OpenAI/OpenRouter
+OPENAI_BASE_URL=https://openrouter.ai/api/v1  # for OpenRouter
+
+# Model & Agent
+MODEL_NAME=claude-3-5-sonnet-20241022
+MAX_TOKENS=1024
+APP_NAME=your-unique-app-name
+SYSTEM_PROMPT=You are a helpful AI assistant.
+BASE_CONTEXT_FILE=base_context.json
+
+# Intelligent Responses
+BOT_NAME=Assistant
+BOT_NAME_VARIANTS=ai,bot,helper,assistant
+BOT_TOPICS=help,question,code,debug,programming
+
+# Rate Limiting
+RATE_LIMIT_PER_MINUTE=10
+RATE_LIMIT_MESSAGE=⏰ Please wait before asking again.
 ```
 
-> [!CAUTION]
-> Make sure you do not push your `.env` file to GitHub or any other version
-> control. These should remain secret. By default the included `.gitignore` file
-> should prevent this.
+### Intelligent Responses
 
+Your bot can respond to messages **without @mentions** by detecting:
 
-### Run locally
+**Name variants:**
+```bash
+BOT_NAME=TechBot
+BOT_NAME_VARIANTS=tech,bot,helper,ai
+```
+
+Now the bot responds to:
+- "Can the **tech** help me with this?"
+- "Is the **bot** available?"
+- "**Helper**, I need assistance"
+
+**Relevant topics:**
+```bash
+BOT_TOPICS=python,javascript,debugging,deploy,docker
+```
+
+Now the bot responds to:
+- "I'm having **python** issues"
+- "Need help with **debugging**"
+- "**Docker** container won't start"
+
+**Configuration tips:**
+- Use lowercase, comma-separated values
+- Start with 3-5 variants/topics, expand as needed
+- Monitor for false positives and adjust
+
+### Base Context
+
+Create conversation context that prepends all interactions:
 
 ```bash
-source .venv/bin/activate
-python src/bot.py
+cp base_context.example.json base_context.json
 ```
 
-### Docker
+Example format:
+```json
+[
+  {
+    "role": "user",
+    "content": "What is your role?"
+  },
+  {
+    "role": "assistant", 
+    "content": "I'm a specialized AI assistant for your team..."
+  }
+]
+```
 
-The project offers [Docker](https://www.docker.com/) for packaging the bot code
-and providing a single executable to start the bot. The below commands will
-build the docker image and then run the bot using a local `.env` file.
+## Advanced Configuration
+
+### System Prompt from File
+
+For complex prompts, use a separate file:
+
+```bash
+# Create prompt file
+cp system_prompt.example.txt system_prompt.txt
+
+# Configure environment
+SYSTEM_PROMPT_FILE=system_prompt.txt
+```
+
+### Per-Channel Rate Limits
+
+Configure different limits for different channels:
+
+```bash
+# Create config file
+cp rate_limits.example.json rate_limits.json
+
+# Get channel IDs (Discord Developer Mode → right-click channel → Copy ID)
+# Configure limits
+{
+  "123456789012345678": 3,   // #general
+  "234567890123456789": 15,  // #dev-help
+  "345678901234567890": 5    // #random
+}
+
+# Set environment variable
+RATE_LIMIT_CONFIG_FILE=rate_limits.json
+```
+
+## Discord Setup
+
+1. **Create Discord Application:**
+   - Go to [Discord Developer Portal](https://discord.com/developers/applications)
+   - Create new application → Bot section → Add Bot
+   - Copy bot token → Enable Message Content Intent
+
+2. **Invite Bot to Server:**
+   - OAuth2 → URL Generator → Select `bot` and `applications.commands`
+   - Permissions: Send Messages, Use Slash Commands, Read Message History
+
+3. **Test Bot:**
+   - Direct mention: `@YourBot hello`
+   - Name variant: `bot, can you help with python?`
+   - Topic mention: `I need help with python`
+   - Slash commands: `/restart`, `/dialectic query`, `/document text`
+
+## Deployment
+
+### Fly.io Deployment
+
+1. **Initialize:**
+   ```bash
+   fly launch --no-deploy
+   ```
+
+2. **Set secrets:**
+   ```bash
+   fly secrets set BOT_TOKEN="your_token"
+   fly secrets set API_PROVIDER="anthropic"
+   fly secrets set ANTHROPIC_API_KEY="your_key"
+   fly secrets set MODEL_NAME="claude-3-5-sonnet-20241022"
+   fly secrets set APP_NAME="my-discord-agent"
+   fly secrets set BOT_NAME="TechBot"
+   fly secrets set BOT_NAME_VARIANTS="tech,bot,helper"
+   fly secrets set BOT_TOPICS="python,javascript,debugging"
+   fly secrets set SYSTEM_PROMPT="Your system prompt"
+   fly secrets set MAX_TOKENS="1024"
+   fly secrets set RATE_LIMIT_PER_MINUTE="10"
+   ```
+
+3. **Deploy:**
+   ```bash
+   fly deploy
+   ```
+
+4. **Check status:**
+   ```bash
+   fly logs
+   fly status
+   ```
+
+### Docker Deployment
 
 ```bash
 docker build -t discord-bot . && docker run --env-file .env discord-bot
 ```
 
-## Deployment
+## Usage
 
-The project contains a generic `fly.toml` that will run a single process for the
-discord bot.
+**Bot responds to:**
+- **Direct mentions**: `@YourBot help me debug this`
+- **Name variants**: `bot, can you help with python?`
+- **Topic keywords**: `I'm having javascript issues`
+- **Slash commands**:
+  - `/restart` - Reset conversation history
+  - `/dialectic query` - Search conversation history  
+  - `/document text` - Save information to knowledge base
 
-To launch the bot for the first time, run `fly launch`.
-Use `cat .env | fly secrets import` to add the environment variables to fly.
+**Response logic:**
+```
+@mention OR (name_variant OR topic) → Bot responds
+```
 
-**By default, `fly.toml` will automatically stop the machine if inactive. This
-doesn't work well with a discord bot, so remove that line and change `min_machines_running` to `1`.**
+**Rate limiting:**
+- Per-channel limits (independent tracking)
+- Global fallback for unconfigured channels
+- Shows friendly message when limited
 
-After launching, use `fly deploy` to update your deployment.
+## Architecture
+
+### Discord ↔ Honcho Flow
+
+1. **Message received** → validate mentions OR check name variants/topics
+2. **Rate limit check** → per-channel limits
+3. **Honcho session** → get/create user & session for channel
+4. **Context assembly** → base context + history + current message
+5. **API call** → Anthropic/OpenAI with full context
+6. **Response & storage** → send to Discord + save to Honcho
+
+### Memory Management
+
+- **Per-channel sessions**: Each Discord channel = separate conversation
+- **Base context**: Always included in API calls (personality/background)
+- **Persistent history**: Survives bot restarts via Honcho
+- **User isolation**: Each user has independent memory per channel
+
+## Troubleshooting
+
+**Bot not responding:**
+- Check Discord permissions & bot token
+- Verify API keys and model names
+- Check rate limits (wait 1 minute)
+- View logs: `fly logs`
+
+**Intelligent responses not working:**
+- Verify `BOT_NAME_VARIANTS` and `BOT_TOPICS` are set
+- Check logs for "Bot configured with X name variants and Y topic variants"
+- Test with exact variant/topic words
+- Ensure bot has Message Content Intent enabled
+
+**Too many responses:**
+- Reduce number of variants/topics
+- Use more specific keywords
+- Increase rate limits if needed
+
+**Configuration issues:**
+- Validate JSON syntax for config files
+- Ensure channel IDs are strings in JSON
+- Check file permissions (readable by bot)
+- Verify environment variables are set
+
+## Cost Considerations
+
+**API Costs (per million tokens):**
+- Claude 3.5 Sonnet: ~$3-15
+- Claude 3 Opus: ~$15-75  
+- Claude 3 Haiku: ~$0.25-1.25
+- GPT-4: ~$30-60
+- GPT-3.5 Turbo: ~$0.5-2
+
+**Hosting:**
+- Fly.io: ~$5-10/month
+
+**Cost optimization:**
+- Use rate limiting to control usage
+- Choose appropriate models for use case
+- Keep base context reasonably sized
+- Monitor usage via provider dashboards
+- Be selective with intelligent response keywords
+
+## File Structure
+
+```
+discord-python-starter/
+├── src/
+│   ├── bot.py                 # Main bot logic
+│   └── honcho_utils.py        # Honcho utilities
+├── env.example                # Configuration template
+├── base_context.example.json  # Example base context
+├── system_prompt.example.txt  # Example system prompt
+├── rate_limits.example.json   # Example rate limits
+├── Dockerfile                 # Docker configuration
+├── fly.toml                   # Fly.io configuration
+└── pyproject.toml            # Python dependencies
+```
+
+> [!CAUTION]
+> Never commit `.env` files or API keys to version control. The included `.gitignore` prevents this.
+
+---
+
+**Need help?** Check the example files and logs for troubleshooting. The bot includes comprehensive error handling and logging to help diagnose issues.
