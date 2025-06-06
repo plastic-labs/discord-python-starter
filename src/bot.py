@@ -34,6 +34,9 @@ if not MODEL_NAME:
 # Token configuration
 MAX_TOKENS = int(os.getenv("MAX_TOKENS", "1024"))
 
+# Prompt caching configuration
+ENABLE_PROMPT_CACHING = os.getenv("ENABLE_PROMPT_CACHING", "true").lower() == "true"
+
 # Bot name and topic configuration for intelligent responses
 BOT_NAME = os.getenv("BOT_NAME", "Assistant").strip('"')
 BOT_NAME_VARIANTS = os.getenv("BOT_NAME_VARIANTS", "").strip('"')
@@ -100,6 +103,7 @@ app = honcho_client.apps.get_or_create(name=APP_NAME)
 
 logger.info(f"Honcho app acquired with id {app.id}")
 logger.info(f"Max tokens per response: {MAX_TOKENS}")
+logger.info(f"Prompt caching: {'enabled' if ENABLE_PROMPT_CACHING else 'disabled'}")
 logger.info(
     f"Bot configured with {len(NAME_VARIANTS)} name variants and {len(TOPIC_VARIANTS)} topic variants"
 )
@@ -161,8 +165,16 @@ if API_PROVIDER == "anthropic":
     try:
         import anthropic
 
-        anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-        logger.info("Using Anthropic API")
+        # Configure Anthropic client with 1-hour cache TTL beta header if caching is enabled
+        if ENABLE_PROMPT_CACHING:
+            anthropic_client = anthropic.Anthropic(
+                api_key=ANTHROPIC_API_KEY,
+                default_headers={"anthropic-beta": "extended-cache-ttl-2025-04-11"},
+            )
+            logger.info("Using Anthropic API with 1-hour cache TTL enabled")
+        else:
+            anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+            logger.info("Using Anthropic API")
     except ImportError:
         logger.error("Anthropic library not installed. Run: pip install anthropic")
         exit(1)
@@ -207,45 +219,125 @@ def load_base_context():
 def llm(prompt, chat_history=None) -> str:
     """
     Call the configured LLM API with the given prompt, base context, and chat history.
-    Supports both OpenAI and Anthropic APIs.
+    Supports both OpenAI and Anthropic APIs with prompt caching for Anthropic.
     """
     try:
-        messages = []
-
-        # Add base context first (this prepends all other context)
-        base_context = load_base_context()
-        messages.extend(base_context)
-
-        # Add chat history from Honcho
-        if chat_history:
-            messages.extend(
-                [
-                    {
-                        "role": "user" if msg.is_user else "assistant",
-                        "content": msg.content,
-                    }
-                    for msg in chat_history
-                ]
-            )
-
-        # Add current user message
-        messages.append({"role": "user", "content": prompt})
-
         # Create token-aware system prompt
         token_aware_prompt = f"{SYSTEM_PROMPT}\n\nIMPORTANT: You have a strict limit of {MAX_TOKENS} tokens for your response. Keep your answers concise and complete within this limit. If you need to provide a long response, prioritize the most important information and indicate if there's more to discuss."
 
         if API_PROVIDER == "anthropic":
+            messages = []
+
+            # Add base context
+            base_context = load_base_context()
+
+            if ENABLE_PROMPT_CACHING and base_context:
+                # CACHING ENABLED: Add base context with prompt caching
+                # Add all base context messages except the last one normally
+                messages.extend(base_context[:-1])
+
+                # Add the last base context message with cache control
+                last_base_message = base_context[-1].copy()
+                if "content" in last_base_message:
+                    # Handle both string and list content formats
+                    if isinstance(last_base_message["content"], str):
+                        last_base_message["content"] = [
+                            {
+                                "type": "text",
+                                "text": last_base_message["content"],
+                                "cache_control": {"type": "ephemeral", "ttl": "1h"},
+                            }
+                        ]
+                    elif isinstance(last_base_message["content"], list):
+                        # If already a list, add cache control to the last content block
+                        last_base_message["content"] = last_base_message[
+                            "content"
+                        ].copy()
+                        if last_base_message["content"]:
+                            last_content = last_base_message["content"][-1].copy()
+                            last_content["cache_control"] = {
+                                "type": "ephemeral",
+                                "ttl": "1h",
+                            }
+                            last_base_message["content"][-1] = last_content
+
+                messages.append(last_base_message)
+            elif base_context:
+                # CACHING DISABLED: Add base context normally
+                messages.extend(base_context)
+
+            # Add chat history from Honcho (not cached as it changes frequently)
+            if chat_history:
+                messages.extend(
+                    [
+                        {
+                            "role": "user" if msg.is_user else "assistant",
+                            "content": msg.content,
+                        }
+                        for msg in chat_history
+                    ]
+                )
+
+            # Add current user message (not cached as it's always new)
+            messages.append({"role": "user", "content": prompt})
+
+            # Prepare system prompt
+            if ENABLE_PROMPT_CACHING:
+                # CACHING ENABLED: Use cached system prompt with 1-hour TTL
+                system_prompt_param = [
+                    {
+                        "type": "text",
+                        "text": token_aware_prompt,
+                        "cache_control": {"type": "ephemeral", "ttl": "1h"},
+                    }
+                ]
+            else:
+                # CACHING DISABLED: Use regular system prompt
+                system_prompt_param = token_aware_prompt
+
             # Call Anthropic API
             response = anthropic_client.messages.create(
                 model=MODEL_NAME,
                 max_tokens=MAX_TOKENS,
-                system=token_aware_prompt,
+                system=system_prompt_param,
                 messages=messages,
             )
+
+            # Log cache performance for monitoring (only when caching is enabled)
+            if ENABLE_PROMPT_CACHING and hasattr(response, "usage"):
+                usage = response.usage
+                if hasattr(usage, "cache_creation_input_tokens") and hasattr(
+                    usage, "cache_read_input_tokens"
+                ):
+                    logger.info(
+                        f"Cache performance - Created: {usage.cache_creation_input_tokens}, Read: {usage.cache_read_input_tokens}"
+                    )
+
             return response.content[0].text
 
         elif API_PROVIDER == "openai":
-            # Call OpenAI API (or OpenAI-compatible APIs like OpenRouter)
+            # OpenAI doesn't support prompt caching, use standard approach
+            messages = []
+
+            # Add base context
+            base_context = load_base_context()
+            messages.extend(base_context)
+
+            # Add chat history from Honcho
+            if chat_history:
+                messages.extend(
+                    [
+                        {
+                            "role": "user" if msg.is_user else "assistant",
+                            "content": msg.content,
+                        }
+                        for msg in chat_history
+                    ]
+                )
+
+            # Add current user message
+            messages.append({"role": "user", "content": prompt})
+
             # For OpenAI, system prompt goes in messages array
             openai_messages = [{"role": "system", "content": token_aware_prompt}]
             openai_messages.extend(messages)
