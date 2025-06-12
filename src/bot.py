@@ -19,19 +19,36 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 MODEL_NAME = os.getenv("MODEL_NAME")
 MODEL_API_KEY = os.getenv("MODEL_API_KEY")
 APP_NAME = os.getenv("APP_NAME")
+HONCHO_API_KEY = os.getenv("HONCHO_API_KEY", "local")  # Default to "local" for local instance
+HONCHO_BASE_URL = os.getenv("HONCHO_BASE_URL", "http://localhost:8000")  # Default to localhost:8000
 
 
-honcho_client = Honcho()
+honcho_client = Honcho(
+    base_url=HONCHO_BASE_URL,
+    api_key=HONCHO_API_KEY
+)
 app = honcho_client.apps.get_or_create(name=APP_NAME)
 
 logger.info(f"Honcho app acquired with id {app.id}")
 
 openai = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=MODEL_API_KEY)
 
-intents = discord.Intents.default()
-intents.messages = True
-intents.message_content = True
-intents.members = True
+# Configure intents explicitly
+intents = discord.Intents(
+    guilds=True,
+    messages=True,
+    message_content=True,
+    members=False,  # Explicitly disable members intent
+    presences=False,  # Explicitly disable presences intent
+    voice_states=False,  # Explicitly disable voice states intent
+    guild_messages=True,
+    dm_messages=False,  # We don't need DM messages
+    guild_reactions=False,
+    dm_reactions=False,
+    guild_typing=False,
+    dm_typing=False
+)
+
 bot = discord.Bot(intents=intents)
 
 
