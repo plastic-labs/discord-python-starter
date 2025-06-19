@@ -6,8 +6,6 @@ from dotenv import load_dotenv
 from honcho import Honcho
 from openai import OpenAI
 
-from honcho_utils import get_session, get_user_collection
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 logging.getLogger("discord").setLevel(logging.ERROR)
@@ -18,13 +16,11 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 MODEL_NAME = os.getenv("MODEL_NAME")
 MODEL_API_KEY = os.getenv("MODEL_API_KEY")
-APP_NAME = os.getenv("APP_NAME")
 
 
 honcho_client = Honcho()
-app = honcho_client.apps.get_or_create(name=APP_NAME)
 
-logger.info(f"Honcho app acquired with id {app.id}")
+assistant = honcho_client.peer(id="assistant", config={"observe_me": False})
 
 openai = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=MODEL_API_KEY)
 
@@ -35,28 +31,21 @@ intents.members = True
 bot = discord.Bot(intents=intents)
 
 
-def llm(prompt, chat_history=None) -> str:
+def llm(session, prompt) -> str:
     """
     Call the LLM with the given prompt and chat history.
 
     You should expand this function with custom logic, prompts, etc.
     """
-    extra_headers = {"X-Title": "Honcho Chatbot"}
-    messages = []
-    if chat_history:
-        messages.extend(
-            [
-                {"role": "user" if msg.is_user else "assistant", "content": msg.content}
-                for msg in chat_history
-            ]
-        )
+    messages: list[dict[str, object]] = session.get_context().to_openai(
+        assistant=assistant
+    )
     messages.append({"role": "user", "content": prompt})
 
     try:
         completion = openai.chat.completions.create(
             model=MODEL_NAME,
             messages=messages,
-            extra_headers=extra_headers,
         )
         return completion.choices[0].message.content
     except Exception as e:
@@ -113,24 +102,9 @@ async def send_discord_message(message, response_content: str):
         await message.channel.send(response_content)
 
 
-def get_user_from_discord(message):
-    """Get a Honcho user object for the message author"""
-    user_id = f"discord_{str(message.author.id)}"
-    user = honcho_client.apps.users.get_or_create(name=user_id, app_id=app.id)
-    return user
-
-
-def get_session_from_discord(channel_id, user_id):
-    """Get a Honcho session object for the message"""
-    location_id = str(channel_id)
-    session, is_new = get_session(
-        honcho_client, app.id, user_id, {location_id: True}, create=True
-    )
-    # session will always exist because create=True
-    assert session is not None
-    if is_new:
-        logger.info(f"New session created for {user_id} in {location_id}")
-    return session
+def get_peer_id_from_discord(message):
+    """Get a Honcho peer ID for the message author"""
+    return f"discord_{str(message.author.id)}"
 
 
 @bot.event
@@ -153,50 +127,21 @@ async def on_message(message):
     if not input:
         return
 
-    user = get_user_from_discord(message)
-
-    session = get_session_from_discord(message.channel.id, user.id)
-
-    # Get messages
-    history_iter = honcho_client.apps.users.sessions.messages.list(
-        app_id=app.id, session_id=session.id, user_id=user.id
-    )
-    history = list(msg for msg in history_iter)
+    peer = honcho_client.peer(id=get_peer_id_from_discord(message))
+    session = honcho_client.session(id=str(message.channel.id))
 
     async with message.channel.typing():
-        response = llm(input, history)
+        response = llm(session, input)
 
     await send_discord_message(message, response)
 
     # Save both the user's message and the bot's response to the session
-    honcho_client.apps.users.sessions.messages.batch(
-        app_id=app.id,
-        user_id=user.id,
-        session_id=session.id,
-        messages=[
-            {"content": input, "is_user": True},
-            {"content": response, "is_user": False},
-        ],
+    session.add_messages(
+        [
+            peer.message(input),
+            assistant.message(response),
+        ]
     )
-
-
-@bot.slash_command(
-    name="restart",
-    description="Reset all of your messaging history with Honcho in this channel.",
-)
-async def restart(ctx):
-    logger.info(f"Restarting conversation for {ctx.author.name}")
-    async with ctx.typing():
-        user = get_user_from_discord(ctx)
-        session = get_session_from_discord(ctx.channel_id, user.id)
-
-        if session:
-            # Delete the session
-            honcho_client.apps.users.sessions.delete(
-                app_id=app.id, user_id=user.id, session_id=session.id
-            )
-
-    await ctx.respond("The conversation has been restarted.")
 
 
 @bot.slash_command(
@@ -207,15 +152,12 @@ async def dialectic(ctx, query: str):
     await ctx.defer()
 
     try:
-        user = get_user_from_discord(ctx)
-        session = get_session_from_discord(ctx.channel_id, user.id)
+        peer = honcho_client.peer(id=get_peer_id_from_discord(ctx))
+        session = honcho_client.session(id=str(ctx.channel.id))
 
-        response = honcho_client.apps.users.sessions.chat(
-            app_id=app.id,
-            user_id=user.id,
-            session_id=session.id,
+        response = peer.chat(
             queries=query,
-            stream=True,
+            session_id=session.id,
         )
 
         if response:
@@ -226,32 +168,6 @@ async def dialectic(ctx, query: str):
             )
     except Exception as e:
         logger.error(f"Error calling Dialectic API: {e}")
-        await ctx.followup.send(
-            f"Sorry, there was an error processing your request: {str(e)}"
-        )
-
-
-@bot.slash_command(
-    name="document",
-    description="Save a document to Honcho.",
-)
-async def document(ctx, doc: str):
-    await ctx.defer()
-
-    try:
-        user = get_user_from_discord(ctx)
-        collection = get_user_collection(honcho_client, app.id, user.id)
-
-        honcho_client.apps.users.collections.documents.create(
-            app_id=app.id,
-            user_id=user.id,
-            collection_id=collection.id,
-            content=doc,
-        )
-
-        await ctx.followup.send("Document saved.")
-    except Exception as e:
-        logger.error(f"Error saving document: {e}")
         await ctx.followup.send(
             f"Sorry, there was an error processing your request: {str(e)}"
         )

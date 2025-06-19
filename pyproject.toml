@@ -2,14 +2,14 @@
 name = "discord-python-starter"
 version = "0.1.0"
 description = "Discord Python Starter Template"
-authors = ["Vineeth Voruganti <13438633+VVoruganti@users.noreply.github.com>", "Ben <ben@plasticlabs.ai"]
-license = "Apache 2.0"
+authors = ["Vineeth Voruganti <13438633+VVoruganti@users.noreply.github.com>", "Ben <ben@plasticlabs.ai>"]
+license = "Apache-2.0"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.13"
 dependencies = [
     "py-cord>=2.5.0",
     "python-dotenv>=1.0.1",
-    "honcho-ai @ git+https://github.com/plastic-labs/honcho-python.git@6f069513e70b3a3600deb09e8eb021337944569f",
+    "honcho-ai>=1.0.2",
     "openai>=1.42.0",
     "schedule>=1.2.2",
     "requests>=2.32.3",
