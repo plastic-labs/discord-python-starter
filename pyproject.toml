@@ -9,8 +9,8 @@ requires-python = ">=3.10,<3.13"
 dependencies = [
     "py-cord>=2.5.0",
     "python-dotenv>=1.0.1",
-    "honcho-ai>=1.0.2",
     "openai>=1.42.0",
     "schedule>=1.2.2",
     "requests>=2.32.3",
+    "honcho-ai>=1.2.1",
 ]

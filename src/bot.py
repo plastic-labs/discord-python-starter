@@ -156,7 +156,7 @@ async def dialectic(ctx, query: str):
         session = honcho_client.session(id=str(ctx.channel.id))
 
         response = peer.chat(
-            queries=query,
+            query=query,
             session_id=session.id,
         )
 
