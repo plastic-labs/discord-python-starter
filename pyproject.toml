@@ -1,6 +1,6 @@
 [project]
 name = "discord-python-starter"
-version = "0.1.0"
+version = "0.3.0"
 description = "Discord Python Starter Template"
 authors = ["Vineeth Voruganti <13438633+VVoruganti@users.noreply.github.com>", "Ben <ben@plasticlabs.ai>"]
 license = "Apache-2.0"
@@ -12,5 +12,5 @@ dependencies = [
     "openai>=1.42.0",
     "schedule>=1.2.2",
     "requests>=2.32.3",
-    "honcho-ai>=1.2.1",
+    "honcho-ai>=1.5.0",
 ]
