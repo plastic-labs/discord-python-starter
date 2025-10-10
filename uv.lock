@@ -197,7 +197,7 @@ wheels = [
 
 [[package]]
 name = "discord-python-starter"
-version = "0.2.0"
+version = "0.3.0"
 source = { virtual = "." }
 dependencies = [
     { name = "honcho-ai" },
@@ -210,7 +210,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "honcho-ai", directory = "../honcho/sdks/python" },
+    { name = "honcho-ai", specifier = ">=1.5.0" },
     { name = "openai", specifier = ">=1.42.0" },
     { name = "py-cord", specifier = ">=2.5.0" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
@@ -311,24 +311,17 @@ wheels = [
 [[package]]
 name = "honcho-ai"
 version = "1.5.0"
-source = { directory = "../honcho/sdks/python" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "honcho-core" },
     { name = "httpx" },
     { name = "pydantic" },
     { name = "typing-extensions", marker = "python_full_version < '3.12'" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "honcho-core", specifier = ">=1.5.1" },
-    { name = "httpx", specifier = ">=0.28.0,<1" },
-    { name = "pydantic", specifier = ">=2.0.0,<3" },
-    { name = "typing-extensions", marker = "python_full_version < '3.12'", specifier = ">=4.12.0" },
+sdist = { url = "https://files.pythonhosted.org/packages/c3/8d/2a3230f4d3600fadffc79158ac7ea9b14f1da415c4ae0ca49e4a61670230/honcho_ai-1.5.0.tar.gz", hash = "sha256:4a9cb71e450cd2ee0131e2da8805a7a015b68f00a26559552675868e3c6778fa", size = 32297, upload-time = "2025-10-10T16:31:37.044Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c0/7d/94a7c52d31da51361cd88619aa29fe8290235ecfc393222eee047d8f9ed2/honcho_ai-1.5.0-py3-none-any.whl", hash = "sha256:d01ac798f0a471591cf5d28bf092b46b77e9e1163a20a30863c6179e11643211", size = 40468, upload-time = "2025-10-10T16:31:35.866Z" },
 ]
-
-[package.metadata.requires-dev]
-dev = [{ name = "ruff", specifier = ">=0.11.13" }]
 
 [[package]]
 name = "honcho-core"
