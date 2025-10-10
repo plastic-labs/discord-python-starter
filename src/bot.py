@@ -1,14 +1,16 @@
 import logging
 import os
+import time
 
 import discord
 from dotenv import load_dotenv
-from honcho import Honcho
+from honcho import Honcho, Peer, Session
 from openai import OpenAI
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 logging.getLogger("discord").setLevel(logging.ERROR)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 load_dotenv()
 
@@ -18,11 +20,11 @@ MODEL_NAME = os.getenv("MODEL_NAME")
 MODEL_API_KEY = os.getenv("MODEL_API_KEY")
 
 
-honcho_client = Honcho()
+honcho_client = Honcho(workspace_id=os.getenv("HONCHO_WORKSPACE_ID", "default"))
 
 assistant = honcho_client.peer(id="assistant", config={"observe_me": False})
 
-openai = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=MODEL_API_KEY)
+openai = OpenAI(api_key=MODEL_API_KEY)
 
 intents = discord.Intents.default()
 intents.messages = True
@@ -31,23 +33,35 @@ intents.members = True
 bot = discord.Bot(intents=intents)
 
 
-def llm(session, prompt) -> str:
+def llm(session: Session, peer: Peer, prompt: str) -> str:
     """
     Call the LLM with the given prompt and chat history.
 
     You should expand this function with custom logic, prompts, etc.
     """
-    messages: list[dict[str, object]] = session.get_context().to_openai(
-        assistant=assistant
-    )
+    get_context_start_time = time.perf_counter()
+    messages: list[dict[str, object]] = session.get_context(
+        tokens=1024,  # Can edit this to be anything
+        peer_target=peer.id,
+    ).to_openai(assistant=assistant)
+
     messages.append({"role": "user", "content": prompt})
 
+    get_context_end_time = time.perf_counter()
+    get_context_duration = get_context_end_time - get_context_start_time
+    logger.info(f"Got context from Honcho in {get_context_duration:.2f} seconds")
+
     try:
+        completion_start_time = time.perf_counter()
         completion = openai.chat.completions.create(
             model=MODEL_NAME,
             messages=messages,
         )
+        completion_end_time = time.perf_counter()
+        completion_duration = completion_end_time - completion_start_time
+        logger.info(f"Got completion from LLM in {completion_duration:.2f} seconds")
         return completion.choices[0].message.content
+
     except Exception as e:
         print(e)
         return f"Error: {e}"
@@ -56,9 +70,8 @@ def llm(session, prompt) -> str:
 def validate_message(message) -> bool:
     """
     Determine if the message is valid for the bot to respond to.
-    Return True if it is, False otherwise. Currently, the bot will
-    only respond to messages that tag it with an @mention in a
-    public channel and are not from the bot itself.
+    Return True if it is, False otherwise. Uncomment the line that checks for
+    the bot's mention in the message to only allow @mention responses.
     """
     if message.author == bot.user:
         # ensure the bot does not reply to itself
@@ -67,8 +80,8 @@ def validate_message(message) -> bool:
     if isinstance(message.channel, discord.DMChannel):
         return False
 
-    if not bot.user.mentioned_in(message):
-        return False
+    # if not bot.user.mentioned_in(message):
+    #     return False
 
     return True
 
@@ -109,7 +122,7 @@ def get_peer_id_from_discord(message):
 
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user}")
+    print(f"Logged in as {bot.user} -- running model {MODEL_NAME}")
     print("Waiting for messages...")
 
 
@@ -118,6 +131,7 @@ async def on_message(message):
     """
     Receive a message from Discord and respond with a message from our LLM assistant.
     """
+    response_start_time = time.perf_counter()
     if not validate_message(message):
         return
 
@@ -131,9 +145,13 @@ async def on_message(message):
     session = honcho_client.session(id=str(message.channel.id))
 
     async with message.channel.typing():
-        response = llm(session, input)
+        response = llm(session, peer, input)
 
     await send_discord_message(message, response)
+
+    response_end_time = time.perf_counter()
+    response_duration = response_end_time - response_start_time
+    logger.info(f"Responded in {response_duration:.2f} seconds")
 
     # Save both the user's message and the bot's response to the session
     session.add_messages(
